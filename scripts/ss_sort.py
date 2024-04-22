@@ -3,9 +3,10 @@ import gradio as gr
 import face_recognition
 import numpy as np
 from datetime import datetime
+import hashlib
 import re
 
-from modules import scripts, shared
+from modules import scripts, shared, images
 from modules.processing import Processed
 from modules.ui_components import FormColumn
 
@@ -33,7 +34,7 @@ class SimilaritySifter(scripts.Script):
                         label="Similarity Threshold",
                         minimum=0.0,
                         maximum=1.0,
-                        value=0.9,
+                        value=0.7,
                         step=0.01,
                         info="Threshold for removing low similarity images."
                     )
@@ -47,8 +48,7 @@ class SimilaritySifter(scripts.Script):
         for image in processed.images[1:]:
             similarity_per = int(image.info.get("SS_similarity", 0) * 1000)
             seed = int(re.search(r"Seed: (\d+)", image.info.get("parameters", "")).group(1))
-            image_path = os.path.join(output_folder, f"{similarity_per:04d}_{seed}.png")
-            image.save(image_path)
+            images.save_image(image, path=output_folder, basename="", seed=seed, pnginfo_section_name="parameters", info=image.info.get("parameters", ""), extension=".png", save_to_dirs=False, forced_filename=f"{similarity_per:04d}_{seed}")
 
     def calculate_similarity(self, uploaded_image, generated_image):
         uploaded_encodings = face_recognition.face_encodings(uploaded_image)
@@ -84,5 +84,5 @@ class SimilaritySifter(scripts.Script):
         sorted_indices = np.argsort(filtered_similarities)[::-1]
         processed.images[1:] = [filtered_images[i] for i in sorted_indices]
         processed.infotexts[1:] = [filtered_infotexts[i] for i in sorted_indices]
-        if len(processed.images[1:]) > 1:
+        if len(similarities) > 1 and len(processed.images[1:]) > 0:
             self.save_images(processed)
