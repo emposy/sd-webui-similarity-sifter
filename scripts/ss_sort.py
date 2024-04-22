@@ -47,7 +47,11 @@ class SimilaritySifter(scripts.Script):
         os.makedirs(output_folder, exist_ok=True)
         for image in processed.images[1:]:
             similarity_per = int(image.info.get("SS_similarity", 0) * 1000)
-            seed = int(re.search(r"Seed: (\d+)", image.info.get("parameters", "")).group(1))
+            seed_match = re.search(r"Seed: (\d+)", image.info.get("parameters", ""))
+            if seed_match:
+                seed = int(seed_match.group(1))
+            else:
+                seed = 0
             images.save_image(image, path=output_folder, basename="", seed=seed, pnginfo_section_name="parameters", info=image.info.get("parameters", ""), extension=".png", save_to_dirs=False, forced_filename=f"{similarity_per:04d}_{seed}")
 
     def calculate_similarity(self, uploaded_image, generated_image):
@@ -71,7 +75,8 @@ class SimilaritySifter(scripts.Script):
     def postprocess(self, p: Processed, processed: Processed, is_enabled, uploaded_image, remove_low_similarity, similarity_threshold):
         if not is_enabled:
             return
-        similarities = [image.info.get("SS_similarity", 0) for image in processed.images[1:]]
+        max_len = len(processed.infotexts)
+        similarities = [image.info.get("SS_similarity", 0) for image in processed.images[1:max_len]]
         if remove_low_similarity:
             filtered_similarities = [sim for sim in similarities if sim >= similarity_threshold]
             filtered_images = [image for image, sim in zip(processed.images[1:], similarities) if sim >= similarity_threshold]
@@ -80,9 +85,8 @@ class SimilaritySifter(scripts.Script):
             filtered_similarities = similarities
             filtered_images = processed.images[1:]
             filtered_infotexts = processed.infotexts[1:]
-
         sorted_indices = np.argsort(filtered_similarities)[::-1]
-        processed.images[1:] = [filtered_images[i] for i in sorted_indices]
+        processed.images[1:] = [filtered_images[i] for i in sorted_indices] + processed.images[max_len:]
         processed.infotexts[1:] = [filtered_infotexts[i] for i in sorted_indices]
         if len(similarities) > 1 and len(processed.images[1:]) > 0:
             self.save_images(processed)
