@@ -1,0 +1,1 @@
+ss_output_dir = 'outputs/similarity-sifter'

@@ -1,10 +1,15 @@
+import os
 import gradio as gr
 import face_recognition
 import numpy as np
+from datetime import datetime
+import re
 
-from modules import scripts
+from modules import scripts, shared
 from modules.processing import Processed
 from modules.ui_components import FormColumn
+
+from scripts.ss_config import ss_output_dir
 
 class SimilaritySifter(scripts.Script):
     def title(self):
@@ -34,6 +39,17 @@ class SimilaritySifter(scripts.Script):
                     )
                 return [is_enabled, uploaded_image, remove_low_similarity, similarity_threshold]
 
+    def save_images(self, processed: Processed):
+        if not os.path.exists(shared.opts.data.get("ss_output_dir", ss_output_dir)):
+            os.makedirs(shared.opts.data.get("ss_output_dir", ss_output_dir), exist_ok=True)
+        output_folder = os.path.join(shared.opts.data.get("ss_output_dir", ss_output_dir), f"{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}_{processed.seed}")
+        os.makedirs(output_folder, exist_ok=True)
+        for image in processed.images[1:]:
+            similarity_per = int(image.info.get("SS_similarity", 0) * 1000)
+            seed = int(re.search(r"Seed: (\d+)", image.info.get("parameters", "")).group(1))
+            image_path = os.path.join(output_folder, f"{similarity_per:04d}_{seed}.png")
+            image.save(image_path)
+
     def calculate_similarity(self, uploaded_image, generated_image):
         uploaded_encodings = face_recognition.face_encodings(uploaded_image)
         if len(uploaded_encodings) == 0:
@@ -55,10 +71,10 @@ class SimilaritySifter(scripts.Script):
     def postprocess(self, p: Processed, processed: Processed, is_enabled, uploaded_image, remove_low_similarity, similarity_threshold):
         if not is_enabled:
             return
-        similarities = [img.info.get("SS_similarity", 0) for img in processed.images[1:]]
+        similarities = [image.info.get("SS_similarity", 0) for image in processed.images[1:]]
         if remove_low_similarity:
             filtered_similarities = [sim for sim in similarities if sim >= similarity_threshold]
-            filtered_images = [img for img, sim in zip(processed.images[1:], similarities) if sim >= similarity_threshold]
+            filtered_images = [image for image, sim in zip(processed.images[1:], similarities) if sim >= similarity_threshold]
             filtered_infotexts = [infotext for infotext, sim in zip(processed.infotexts[1:], similarities) if sim >= similarity_threshold]
         else:
             filtered_similarities = similarities
@@ -66,8 +82,7 @@ class SimilaritySifter(scripts.Script):
             filtered_infotexts = processed.infotexts[1:]
 
         sorted_indices = np.argsort(filtered_similarities)[::-1]
-        sorted_images = [filtered_images[i] for i in sorted_indices]
-        sorted_similarities = [float(filtered_similarities[i]) for i in sorted_indices]
-        sorted_infotexts = [filtered_infotexts[i] for i in sorted_indices] 
-        processed.images[1:] = sorted_images
-        processed.infotexts[1:] = sorted_infotexts
+        processed.images[1:] = [filtered_images[i] for i in sorted_indices]
+        processed.infotexts[1:] = [filtered_infotexts[i] for i in sorted_indices]
+        if len(processed.images[1:]) > 1:
+            self.save_images(processed)
