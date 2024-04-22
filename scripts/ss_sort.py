@@ -14,7 +14,7 @@ class SimilaritySifter(scripts.Script):
         return scripts.AlwaysVisible
 
     def ui(self, is_img2img):
-        with gr.Accordion("SimilaritySifter", open=True):
+        with gr.Accordion("SimilaritySifter", open=False):
             with FormColumn():
                 is_enabled = gr.Checkbox(label="Enable SimilaritySifter", value=False)
                 uploaded_image = gr.Image(label="Upload Image", source="upload", interactive=True)
@@ -50,19 +50,24 @@ class SimilaritySifter(scripts.Script):
             return
         similarity = self.calculate_similarity(uploaded_image, pp.image)
         pp.image.info["SS_similarity"] = similarity
+        p.extra_generation_params['SS similarity'] = similarity
         
     def postprocess(self, p: Processed, processed: Processed, is_enabled, uploaded_image, remove_low_similarity, similarity_threshold):
         if not is_enabled:
             return
         similarities = [img.info.get("SS_similarity", 0) for img in processed.images[1:]]
         if remove_low_similarity:
-            filtered_images = [img for img, sim in zip(processed.images[1:], similarities) if sim >= similarity_threshold]
             filtered_similarities = [sim for sim in similarities if sim >= similarity_threshold]
+            filtered_images = [img for img, sim in zip(processed.images[1:], similarities) if sim >= similarity_threshold]
+            filtered_infotexts = [infotext for infotext, sim in zip(processed.infotexts[1:], similarities) if sim >= similarity_threshold]
         else:
-            filtered_images = processed.images[1:]
             filtered_similarities = similarities
+            filtered_images = processed.images[1:]
+            filtered_infotexts = processed.infotexts[1:]
 
         sorted_indices = np.argsort(filtered_similarities)[::-1]
         sorted_images = [filtered_images[i] for i in sorted_indices]
         sorted_similarities = [float(filtered_similarities[i]) for i in sorted_indices]
+        sorted_infotexts = [filtered_infotexts[i] for i in sorted_indices] 
         processed.images[1:] = sorted_images
+        processed.infotexts[1:] = sorted_infotexts
