@@ -66,14 +66,14 @@ class SimilaritySifter(scripts.Script):
         return 1 - similarity
     
     def postprocess_image(self, p: Processed, pp: scripts.PostprocessImageArgs, is_enabled, uploaded_image, remove_low_similarity, similarity_threshold):
-        if not is_enabled or not uploaded_image:
+        if not is_enabled or uploaded_image is None:
             return
         similarity = self.calculate_similarity(uploaded_image, pp.image)
         pp.image.info["SS_similarity"] = similarity
         p.extra_generation_params['SS similarity'] = similarity
         
     def postprocess(self, p: Processed, processed: Processed, is_enabled, uploaded_image, remove_low_similarity, similarity_threshold):
-        if not is_enabled or not uploaded_image:
+        if not is_enabled or uploaded_image is None:
             return
         max_len = len(processed.infotexts)
         similarities = [image.info.get("SS_similarity", 0) for image in processed.images[1:max_len]]
